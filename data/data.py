@@ -5,8 +5,15 @@ import torchvision.transforms as transforms
 
 from torch.utils.data import Dataset
 from PIL import Image
+import time
 
-
+transform = transforms.Compose([
+            transforms.RandomCrop(192),
+            transforms.ToTensor(),  # (H,W,C)->(C,H,W), [0,255]->[0, 1.0] RGB->RGB
+        ])
+a= time.time()
+img = transform(Image.open('train_data_waterloo/pristine_images/00001.bmp'))
+print((time.time()-a)*16)
 
 class DATA(Dataset):
     def __init__(self, args, mode='train'):
@@ -16,14 +23,20 @@ class DATA(Dataset):
         self.test_dir = args.test_dir
         if mode == 'train':
             self.img_dir = os.path.join(self.train_dir, 'pristine_images')
-            self.file_names = sorted(glob.glob(os.path.join(self.img_dir, '*')))
+            self.file_names = sorted(glob.glob(os.path.join(self.img_dir, '*.bmp')))
         if mode == 'test':
-            self.file_names = sorted(glob.glob(os.path.join(self.test_dir, '*')))
+            self.file_names = sorted(glob.glob(os.path.join(self.test_dir, '*.png')))
 
         self.transform = transforms.Compose([
             transforms.RandomCrop(192),
             transforms.ToTensor(),  # (H,W,C)->(C,H,W), [0,255]->[0, 1.0] RGB->RGB
         ])
+
+        self.tensors = list()
+        for file_name in self.file_names:
+            img = Image.open(file_name)
+
+            self.tensors.append(self.transform(img))
 
     def __len__(self):
         return len(self.file_names)
@@ -31,9 +44,6 @@ class DATA(Dataset):
     def __getitem__(self, idx):
 
         ''' get data '''
-        img_path = self.file_names[idx]
+        tensor = self.tensors[idx]
 
-        ''' read image '''
-        img = Image.open(img_path)
-
-        return self.transform(img)
+        return tensor
