@@ -4,7 +4,6 @@ import torch
 import parser
 import models
 import data
-import test
 
 import numpy as np
 import torch.nn as nn
@@ -65,6 +64,7 @@ if __name__ == '__main__':
         model.train()
 
         for idx, (imgs) in enumerate(train_loader):
+
             train_info = 'Epoch: [{0}][{1}/{2}]'.format(epoch, idx + 1, len(train_loader))
             iters += 1
 

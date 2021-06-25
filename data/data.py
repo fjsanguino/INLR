@@ -16,9 +16,9 @@ class DATA(Dataset):
         self.test_dir = args.test_dir
         if mode == 'train':
             self.img_dir = os.path.join(self.train_dir, 'pristine_images')
-            self.file_names = sorted(glob.glob(self.img_dir))
+            self.file_names = sorted(glob.glob(os.path.join(self.img_dir, '*')))
         if mode == 'test':
-            self.file_names = sorted(glob.glob(self.test_dir))
+            self.file_names = sorted(glob.glob(os.path.join(self.test_dir, '*')))
 
         self.transform = transforms.Compose([
             transforms.RandomCrop(192),

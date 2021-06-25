@@ -23,7 +23,7 @@ class ResidualBlock(nn.Module):
 
 class AnalysisTransformer(nn.Module):
 
-    def __init__(self, args):
+    def __init__(self):
         super(AnalysisTransformer, self).__init__()
 
         ''' declare layers used in this network'''
@@ -62,7 +62,7 @@ class AnalysisTransformer(nn.Module):
 
 class SynthesisTransformer(nn.Module):
 
-    def __init__(self, args):
+    def __init__(self):
         super(SynthesisTransformer, self).__init__()
 
         ''' declare layers used in this network'''
@@ -105,7 +105,7 @@ class SynthesisTransformer(nn.Module):
 
 class CompressionNetwork(nn.Module):
 
-    def __init__(self, args):
+    def __init__(self):
         super(CompressionNetwork, self).__init__()
 
         ''' declare layers used in this network'''

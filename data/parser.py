@@ -6,7 +6,7 @@ def arg_parse():
     parser = argparse.ArgumentParser(description='DLCV TA\'s tutorial in image classification using pytorch')
 
     # Datasets parameters
-    parser.add_argument('--data_dir', type=str, default='train_data_waterloo',
+    parser.add_argument('--train_dir', type=str, default='train_data_waterloo',
                         help="root path to data directory")
     parser.add_argument('--test_dir', type=str, default='test_data_div2k',
                         help="root path to data directory")
