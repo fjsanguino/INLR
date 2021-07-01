@@ -34,6 +34,16 @@ if __name__ == '__main__':
 
     ''' load dataset and prepare data loader '''
     print('===> prepare dataloader ...')
+    '''
+    train_loader = data.MultiEpochsDataLoader(data.DATA(args, mode='train'),
+                                               batch_size=args.train_batch,
+                                               num_workers=args.workers,
+                                               shuffle=True)
+    val_loader = data.MultiEpochsDataLoader(data.DATA(args, mode='test'),
+                                               batch_size=args.train_batch,
+                                               num_workers=args.workers,
+                                               shuffle=True)
+    '''
     train_loader = torch.utils.data.DataLoader(data.DATA(args, mode='train'),
                                                batch_size=args.train_batch,
                                                num_workers=args.workers,
@@ -90,11 +100,12 @@ if __name__ == '__main__':
         if epoch % args.val_epoch == 0:
             ''' evaluate the model '''
             metrics = evaluate(model, val_loader)
+            writer.add_scalars('metrics', metrics, iters)
+
             metrics = sorted(metrics.items(), key=lambda x: x[1])
             print('Epoch: [{}]'.format(epoch))
-            for i, (metric, value) in enumerate(metrics.items()):
-                writer.add_scalar(metric, value, iters)
-                print('{}. {}: {}}'.format(i+1, metric, value))
+            for i, (metric, value) in enumerate(metrics):
+                print('{}. {}: {}'.format(i + 1, metric, value))
             print('-----------------------------------------')
 
         ''' save model '''

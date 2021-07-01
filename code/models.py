@@ -52,15 +52,15 @@ class AnalysisTransformer(nn.Module):
         self.conv5 = nn.Conv2d(128, 64, kernel_size=3, padding=1)
 
     def forward(self, img):
-        print(img.shape)
+        #print(img.shape)
         x = self.residualBlock2(self.residualBlock1(self.conv1(img)))
-        print(x.shape)
+        #print(x.shape)
         x = self.residualBlock4(self.residualBlock3(self.conv2(x)))
-        print(x.shape)
+        #print(x.shape)
         x = self.residualBlock6(self.residualBlock5(self.conv3(x)))
-        print(x.shape)
+        #print(x.shape)
         x = self.residualBlock8(self.residualBlock7(self.conv4(x)))
-        print(x.shape)
+        #print(x.shape)
         x = self.conv5(x)
 
         return x
@@ -101,15 +101,15 @@ class SynthesisTransformer(nn.Module):
     def forward(self, img):
 
         x = self.conv1(img)
-        print(x.shape)
+        #print(x.shape)
         x = self.conv2(self.upsample1(self.residualBlock2(self.residualBlock1(x))))
-        print(x.shape)
+        #print(x.shape)
         x = self.conv3(self.upsample2(self.residualBlock4(self.residualBlock3(x))))
-        print(x.shape)
+        #print(x.shape)
         x = self.conv4(self.upsample3(self.residualBlock6(self.residualBlock5(x))))
-        print(x.shape)
+        #print(x.shape)
         x = self.conv5(self.upsample4(self.residualBlock8(self.residualBlock7(x))))
-        print(x.shape)
+        #print(x.shape)
 
         return x
 
@@ -126,9 +126,9 @@ class CompressionNetwork(nn.Module):
     def forward(self, img):
 
         x = self.analysis(img)
-        print(x.shape)
+        #print(x.shape)
         x = quantize(x, torch.from_numpy(np.asarray((-1, 1))).cuda(), 1)
-        print(x.shape)
+        #print(x.shape)
         x = self.synthesis(x)
 
         return x

@@ -113,14 +113,14 @@ def hi_index(ref_img, dst_img):
 
     csf = make_csf(H, W, 32)
     csf = torch.from_numpy(csf.reshape(1,1,H,W,1)).float().repeat(1,C,1,1,2).to(ref.device)
-    x = torch.rfft(ref, 2, onesided=False)
+    x = torch.fft.rfft(ref, 2)#, onesided=False)
     x1 = batch_fftshift2d(x)
     x2 = batch_ifftshift2d( x1 * csf )
-    ref = real(torch.ifft(x2,2))
-    x = torch.rfft(dst, 2, onesided=False)
+    ref = real(torch.fft.ifft(x2,2))
+    x = torch.fft.rfft(dst, 2, onesided=False)
     x1 = batch_fftshift2d(x)
     x2 = batch_ifftshift2d( x1 * csf )
-    dst = real(torch.ifft(x2,2))
+    dst = real(torch.fft.ifft(x2,2))
 
     m1_1,std_1 = ical_std(ref)
     B, C, H1, W1 = m1_1.shape
@@ -165,7 +165,7 @@ def gaborconvolve(im):
     dThetaOnSigma   = 1.5    #Ratio of angular interval between filter orientations
 
     B, C, rows, cols = im.shape
-    imagefft    = torch.rfft(im,2, onesided=False)            # Fourier transform of image
+    imagefft    = torch.fft.rfft(im,2, onesided=False)            # Fourier transform of image
 
     # Pre-compute to speed up filter construction
     x = np.ones((rows,1)) * np.arange(-cols/2.,(cols/2.))/(cols/2.)
@@ -208,7 +208,7 @@ def gaborconvolve(im):
             filter = fftshift(logGabors[s] * spread)
             filter = torch.from_numpy(filter).reshape(1,1,rows,cols,1).repeat(1,C,1,1,2).to(im.device)
             # c =  imagefft * filter
-            e0 = torch.ifft( imagefft * filter, 2 )
+            e0 = torch.fft.ifft( imagefft * filter, 2 )
             E0[o].append(e0)
 
     return E0

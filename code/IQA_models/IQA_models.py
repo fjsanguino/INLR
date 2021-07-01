@@ -1,3 +1,4 @@
+import torch.nn as nn
 from .MS_SSIM import MS_SSIM
 from .VIF import VIF
 from .CW_SSIM import CW_SSIM
@@ -9,9 +10,12 @@ from .NLPD import NLPD
 from .LPIPSvgg import LPIPSvgg
 from .DISTS import DISTS
 
-IQA_models_array = ['MS-SSIM', 'VIF', 'CW-SSIM', 'MAD', 'FSIM', 'GMSD', 'VSI', 'NLPD', 'LPIPS', 'DISTS']
+#IQA_models_array = ['MS-SSIM', 'VIF', 'CW-SSIM', 'MAD', 'FSIM', 'GMSD', 'VSI', 'NLPD', 'LPIPS', 'DISTS']
+IQA_models_array = ['MAE', 'VIF', 'GMSD', 'NLPD']
 
 def IQA_models_class(model_name):
+    if model_name =='MAE':
+        return nn.L1Loss(reduction='none')
     if model_name == 'MS-SSIM':
         return MS_SSIM()
     if model_name == 'VIF':

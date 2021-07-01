@@ -44,7 +44,7 @@ class SteerablePyramid(nn.Module):
 
     def forward(self, x):
 
-        fftfull = torch.rfft(x,2)
+        fftfull = torch.fft.rfft(x,2)
         xreal = fftfull[... , 0]
         xim = fftfull[... ,1]
         x = torch.cat((xreal.unsqueeze(1), xim.unsqueeze(1)), 1 ).unsqueeze( -3 )
