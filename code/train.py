@@ -2,7 +2,7 @@ import os
 import torch
 
 import parser
-import models
+import models_CNN
 import data
 
 import numpy as np
@@ -54,7 +54,7 @@ if __name__ == '__main__':
                                                shuffle=True)
     ''' load model '''
     print('===> prepare model ...')
-    model = models.CompressionNetwork()
+    model = models_CNN.CompressionNetwork()
     model.cuda()  # load model to gpu
 
     ''' define loss '''
