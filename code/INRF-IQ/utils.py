@@ -44,19 +44,21 @@ def get_gaussian_kernel(size, sigma, norm='gauss'):
 
 def INRF_B(u, param):
     L = color.rgb2lab(u) / 100
-    L = torch.from_numpy(L[:, :, 0]).float().cuda()
-    print(np.allclose(L.cpu().numpy(), np.loadtxt('L.txt', delimiter=','), rtol=1e-04, atol=1e-06))
+    L = L[:, :, 0]
+    print(np.allclose(L, np.loadtxt('L.txt', delimiter=','), rtol=1e-04, atol=1e-06))
 
-    h_javi = torch.from_numpy(matlab_style_gauss2D((2 * param['sigmaMu'], 2 * param['sigmaMu']), param['sigmaMu'])).cuda()
-    mUL_javi = scipy.ndimage.correlate(L, h_javi, mode='constant', cval=0, origin=-1)
-    print(np.allclose(mUL_javi, np.loadtxt('mUL.txt',delimiter=','), rtol=1e-04, atol=1e-06)) #tested in matlab with sigmaMU = 5
+    h = matlab_style_gauss2D((2 * param['sigmaMu'], 2 * param['sigmaMu']), param['sigmaMu'])
+    #mUL_javi = scipy.ndimage.correlate(L, h_javi, mode='constant', cval=0, origin=-1)
+    #print(np.allclose(mUL_javi, np.loadtxt('mUL.txt', delimiter=','), rtol=1e-04, atol=1e-06)) #tested in matlab with sigmaMU = 5
 
-    # TODO: not tested
+    L = torch.from_numpy(L).cuda()
     L = torch.reshape(L, (1, 1, L.size()[0], L.size()[1]))
-    h = get_gaussian_kernel(2 * param['sigmaMu'], param['sigmaMu'])
+    h = torch.from_numpy(h).cuda()
+    h = torch.reshape(h, (1, 1, h.size()[0], h.size()[1]))
+
     mUL = conv(L, h)
-    print(np.allclose(mUL.reshape(L.size()[-2], L.size()[-1]).cpu().numpy(), np.loadtxt('mUL.txt', delimiter=','), rtol=1e-04,
-                      atol=1e-06))  # tested in matlab with sigmaMU = 5
+    print(np.allclose(mUL.reshape(mUL.size()[-2], mUL.size()[-1]).cpu().numpy(), np.loadtxt('mUL.txt', delimiter=','), rtol=1e-04,
+                      atol=1e-06))  # tested in matlab with sigmaMU = 5 (tamaño filtro par)
 
     INRF = computeRuInterp_wg_noGPU(L, param['sigmaW'], param['p'], param['q'], param['sigmag'], param['levels_approx'])
 
@@ -73,12 +75,13 @@ def computeRuInterp_wg_noGPU(u, sigmaW, p, q, sigmag, steps):
 
         # todo: test
         g = torch.from_numpy(matlab_style_gauss2D((2 * sigmag, 2 * sigmag), sigmag)).cuda()
+        g = torch.reshape(g, (1, 1, g.size()[0], g.size()[1]))
         gu = conv_reflection(u, g)
-        print(np.allclose(gu.cpu().numpy(), np.loadtxt('gu.txt', delimiter=','), rtol=1e-04,
-                          atol=1e-06))  # tested in matlab with sigmag = 1
+        print(np.allclose(gu.reshape(gu.size(2),gu.size(3)).cpu().numpy(), np.loadtxt('gu.txt', delimiter=','), rtol=1e-04,
+                          atol=1e-06))  # tested in matlab with sigmag = 1, la última columna tiene un error de 0,055
         '''--------------------------------'''
 
-    levels = torch.from_numpy(np.linspace(np.amin(gu), np.amax(gu), steps)).cuda()
+    levels = torch.linspace(torch.min(gu), torch.max(gu), steps).cuda()
 
     R_L = createPiecewiseR(gu, levels, p, q, sigmaW)
     R_U = interpolate(gu, R_L, levels)
@@ -94,6 +97,7 @@ def interpolate(u, R_L, levels):
     for j in range(0, L - 1):
         indexL = (u >= levels[j]) & (u < levels[j + 1])
 
+        #todo: cambiar si cambia
         R_Lj = R_L[:, :, j]
         R_Lj1 = R_L[:, :, j + 1]
 
@@ -104,13 +108,13 @@ def interpolate(u, R_L, levels):
 
 def createPiecewiseR(u, levels, p, q, sigmaW):
     L = len(levels)
-    (M, N) = np.shape(u)
-    R_L = torch.from_numpy(np.zeros((M, N, L))).cuda()
+    (M, N) = (u.size(2), u.size(3))
+    R_L = torch.zeros(M,N,L).cuda()
+    #R_L = torch.from_numpy(np.zeros((M, N, L))).cuda()
 
     # w = createW(M, N, sigmaW)
     # print(np.allclose(w, np.loadtxt('w.txt',delimiter=','), rtol=1e-15, atol=1e-08)) #tested in matlab with M = 512, N = 512 and sigmaW = 25
 
-    # TODO:test
     w = torch.from_numpy(createW(M, N, sigmaW)).cuda()
     print(np.allclose(w.cpu().numpy(), np.loadtxt('w.txt', delimiter=','), rtol=1e-15,
                       atol=1e-08))  # tested in matlab with M = 512, N = 512 and sigmaW = 25
@@ -121,10 +125,17 @@ def createPiecewiseR(u, levels, p, q, sigmaW):
     # print(np.allclose(R_L, np.loadtxt('R_L.txt',delimiter=','), rtol=1e-15, atol=1e-08)) #tested in matlab with M = 512, N = 512 and sigmaW = 25
 
     '''------------------------------------------------'''
-    for l in levels:
-        R_L[:, :, l] = conv(sigmoidatan(u - l), w)
-    print(np.allclose(R_L, np.loadtxt('R_L.txt', delimiter=','), rtol=1e-15,
-                      atol=1e-08))  # tested in matlab with M = 512, N = 512 and sigmaW = 25
+    #todo: cambiar para que se pueda meter en conv con img de tamaño (L, 1, h, w) y kernel (1, 1, h',w')
+    w = torch.reshape(w, (1, 1, w.size()[0], w.size()[1]))
+    for l in range(len(levels)):
+        R_L_l = conv(sigmoidatan(u - levels[l]), w)
+        R_L[:, :, l] = R_L_l.reshape(R_L_l.size(2), R_L_l.size(3))
+
+    R_L = R_L.reshape(50*512*512).cpu().numpy()
+    print(np.allclose(R_L,
+                np.loadtxt('../../data/R_L.txt', delimiter=',').reshape((50, 512, 512)), rtol=1e-03,
+                atol=1e-06))  # tested in matlab with M = 512, N = 512 and sigmaW = 25
+    exit(0)
     return R_L
 
 
@@ -146,14 +157,25 @@ def convolve(u, w, pad):
 
 
 def conv(img, kernel):
-    padding = np.int((kernel.shape[-1] - 1) / 2)
-    return F.conv2d(input=img, weight=kernel, padding=padding)
+    padding = np.int((kernel.shape[-1]) // 2)
+    return F.conv2d(input=img, weight=kernel, padding=padding)[:,:,1:,1:]
 
 
 def conv_reflection(img, kernel):
-    padding = np.int((kernel.shape[-1] - 1) / 2)
+    padding = np.int((kernel.shape[-1]) / 2)
+    #matlab y scipy.ndimage.correlate reflejan los bordes y nn.ReflectionPad2d de Pytorch no
+    pad_rep = nn.ReplicationPad2d(1)
     pad_ref = nn.ReflectionPad2d(padding)
-    return F.conv2d(input=pad_ref(img), weight=kernel)
+    pad_img = pad_ref(pad_rep(img))
+
+    pad_img_size_x = pad_img.size(2)
+    pad_img_size_y = pad_img.size(3)
+    pad_img = pad_img[:, :, torch.arange(pad_img_size_x) != padding, : ]
+    pad_img = pad_img[:, :, torch.arange(pad_img.size(2)) != pad_img.size(2)-padding, :]
+    pad_img = pad_img[:, :, :, torch.arange(pad_img_size_y) != padding ]
+    pad_img = pad_img[:, :, :, torch.arange(pad_img.size(3)) != pad_img.size(3)-padding]
+
+    return F.conv2d(input=pad_img, weight=kernel)[:,:,1:,1:]
 
 
 def createW(M, N, sigmaW):
@@ -163,7 +185,7 @@ def createW(M, N, sigmaW):
 
 
 def sigmoidatan(v):
-    return np.arctan(10 * v)
+    return torch.atan(10 * v)
 
 
 if __name__ == "__main__":
