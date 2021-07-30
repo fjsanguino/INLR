@@ -22,6 +22,28 @@ def matlab_style_gauss2D(shape=(3, 3), sigma=0.5):
         h /= sumh
     return h
 
+def matlab_style_gauss2D_pytorch(shape=(3, 3), sigma=0.5):
+    m, n = [(ss - 1.) / 2. for ss in shape]
+    y, x = torch.meshgrid(torch.arange(start=-m, end=m+1, dtype=torch.float32), torch.arange(start=-n, end=n+1, dtype=torch.float32))
+    h = torch.zeros(1, 1, shape[0], shape[1], dtype=torch.float64).cuda()
+    h[0, 0, ...] = torch.exp(-(x * x + y * y) / (2. * sigma * sigma))
+    h[h < torch.finfo(h.dtype).eps * h.max()] = 0
+    sumh = h.sum()
+    if sumh != 0:
+        h /= sumh
+    return h
+
+def createW(M, N, sigmaW):
+    J, I = np.ogrid[1:N + 1, 1:M + 1]
+    w = np.exp(-((I - M / 2) * (I - M / 2) + (J - N / 2) * (J - N / 2)) / (2. * sigmaW * sigmaW))
+    return w / w.sum()
+
+def createW_pytorch(M, N, sigmaW):
+    J, I  = torch.meshgrid(torch.arange(start=1, end=N+1, dtype=torch.float64), torch.arange(start=1, end=M+1, dtype=torch.float64))
+    w = torch.zeros(1, 1, M, N, dtype=torch.float64).cuda()
+    w[0, 0, ...] = torch.exp(-((I - M / 2) * (I - M / 2) + (J - N / 2) * (J - N / 2)) / (2. * sigmaW * sigmaW))
+    return w / w.sum()
+
 
 def get_gaussian_kernel(size, sigma, norm='gauss'):
     if (size % 2) == 0:  # If size is even, size = size - 1
@@ -47,18 +69,15 @@ def INRF_B(u, param):
     L = L[:, :, 0]
     print(np.allclose(L, np.loadtxt('L.txt', delimiter=','), rtol=1e-04, atol=1e-06))
 
-    h = matlab_style_gauss2D((2 * param['sigmaMu'], 2 * param['sigmaMu']), param['sigmaMu'])
+    h = matlab_style_gauss2D_pytorch((2 * param['sigmaMu'], 2 * param['sigmaMu']), param['sigmaMu'])
     #mUL_javi = scipy.ndimage.correlate(L, h_javi, mode='constant', cval=0, origin=-1)
     #print(np.allclose(mUL_javi, np.loadtxt('mUL.txt', delimiter=','), rtol=1e-04, atol=1e-06)) #tested in matlab with sigmaMU = 5
 
-    L = torch.from_numpy(L).cuda()
+    L = torch.from_numpy(L).double().cuda()
     L = torch.reshape(L, (1, 1, L.size()[0], L.size()[1]))
-    h = torch.from_numpy(h).cuda()
-    h = torch.reshape(h, (1, 1, h.size()[0], h.size()[1]))
 
     mUL = conv(L, h)
-    print(np.allclose(mUL.reshape(mUL.size()[-2], mUL.size()[-1]).cpu().numpy(), np.loadtxt('mUL.txt', delimiter=','), rtol=1e-04,
-                      atol=1e-06))  # tested in matlab with sigmaMU = 5 (tamaño filtro par)
+    print(np.allclose(mUL.reshape(mUL.size()[-2], mUL.size()[-1]).cpu().numpy(), np.loadtxt('mUL.txt', delimiter=','), rtol=1e-04, atol=1e-06))  # tested in matlab with sigmaMU = 5 (tamaño filtro par)
 
     INRF = computeRuInterp_wg_noGPU(L, param['sigmaW'], param['p'], param['q'], param['sigmag'], param['levels_approx'])
 
@@ -73,15 +92,12 @@ def computeRuInterp_wg_noGPU(u, sigmaW, p, q, sigmag, steps):
         # gu = scipy.ndimage.correlate(u, g, mode='reflect', origin=-1)
         # print(np.allclose(gu, np.loadtxt('gu.txt',delimiter=','), rtol=1e-04, atol=1e-06)) #tested in matlab with sigmag = 1
 
-        # todo: test
-        g = torch.from_numpy(matlab_style_gauss2D((2 * sigmag, 2 * sigmag), sigmag)).cuda()
-        g = torch.reshape(g, (1, 1, g.size()[0], g.size()[1]))
+        g = matlab_style_gauss2D_pytorch((2 * sigmag, 2 * sigmag), sigmag)
         gu = conv_reflection(u, g)
-        print(np.allclose(gu.reshape(gu.size(2),gu.size(3)).cpu().numpy(), np.loadtxt('gu.txt', delimiter=','), rtol=1e-04,
-                          atol=1e-06))  # tested in matlab with sigmag = 1, la última columna tiene un error de 0,055
+        #print(np.allclose(gu.reshape(gu.size(2),gu.size(3)).cpu().numpy(), np.loadtxt('gu.txt', delimiter=','), rtol=1e-04, atol=1e-06))  # tested in matlab with sigmag = 1, la última columna tiene un error de 0,055
         '''--------------------------------'''
 
-    levels = torch.linspace(torch.min(gu), torch.max(gu), steps).cuda()
+    levels = torch.linspace(torch.min(gu), torch.max(gu), steps, dtype=torch.float64).cuda()
 
     R_L = createPiecewiseR(gu, levels, p, q, sigmaW)
     R_U = interpolate(gu, R_L, levels)
@@ -107,17 +123,18 @@ def interpolate(u, R_L, levels):
 
 
 def createPiecewiseR(u, levels, p, q, sigmaW):
-    L = len(levels)
+    nlevels = len(levels)
     (M, N) = (u.size(2), u.size(3))
-    R_L = torch.zeros(M,N,L).cuda()
+    #R_L = torch.zeros(M,N,nlevels).cuda()
+    N, C, rows, cols = u.shape
+    r_levels = torch.zeros(size=((N, C, rows, cols, nlevels)), dtype=torch.float64).cuda()
     #R_L = torch.from_numpy(np.zeros((M, N, L))).cuda()
 
     # w = createW(M, N, sigmaW)
     # print(np.allclose(w, np.loadtxt('w.txt',delimiter=','), rtol=1e-15, atol=1e-08)) #tested in matlab with M = 512, N = 512 and sigmaW = 25
 
-    w = torch.from_numpy(createW(M, N, sigmaW)).cuda()
-    print(np.allclose(w.cpu().numpy(), np.loadtxt('w.txt', delimiter=','), rtol=1e-15,
-                      atol=1e-08))  # tested in matlab with M = 512, N = 512 and sigmaW = 25
+    w = createW_pytorch(rows, cols, sigmaW)
+    #print(np.allclose(w.cpu().numpy(), np.loadtxt('w.txt', delimiter=','), rtol=1e-15, atol=1e-08))  # tested in matlab with M = 512, N = 512 and sigmaW = 25
 
     # not tested
     # for l in levels:
@@ -126,18 +143,22 @@ def createPiecewiseR(u, levels, p, q, sigmaW):
 
     '''------------------------------------------------'''
     #todo: cambiar para que se pueda meter en conv con img de tamaño (L, 1, h, w) y kernel (1, 1, h',w')
-    w = torch.reshape(w, (1, 1, w.size()[0], w.size()[1]))
-    for l in range(len(levels)):
-        R_L_l = conv(sigmoidatan(u - levels[l]), w)
-        R_L[:, :, l] = R_L_l.reshape(R_L_l.size(2), R_L_l.size(3))
-
-    R_L = R_L.reshape(50*512*512).cpu().numpy()
-    print(np.allclose(R_L,
-                np.loadtxt('../../data/R_L.txt', delimiter=',').reshape((50, 512, 512)), rtol=1e-03,
-                atol=1e-06))  # tested in matlab with M = 512, N = 512 and sigmaW = 25
+    #for l in range(len(levels)):
+    #    R_L_l = conv(sigmoidatan(u - levels[l]), w)
+    #    R_L[:, :, l] = R_L_l.reshape(R_L_l.size(2), R_L_l.size(3))
+    for nlevel in range(nlevels):
+        r_levels[..., nlevel] = conv(img=sigmoidatan(levels[nlevel] - u),
+                                              kernel=w)
+    print("R_L calculated")
+    #R_L = R_L.cpu().numpy()
+    print(np.allclose(r_levels.cpu().numpy().reshape(512, 512, 2),
+                np.loadtxt('../../data/R_L_2.txt', delimiter=',').reshape((512, 512, 2)), rtol=1e-03,
+                atol=1e-06))  # tested in matlab with M = 512, N = 512 and sigmaW = 25, nlevels = 2
     exit(0)
-    return R_L
+    return r_levels
 
+#r_levels_matlab sum = 13331.223509999865
+#r_levels sum = 11426.77578896794
 
 def convolve(u, w, pad):
     pad_i = pad
@@ -178,10 +199,6 @@ def conv_reflection(img, kernel):
     return F.conv2d(input=pad_img, weight=kernel)[:,:,1:,1:]
 
 
-def createW(M, N, sigmaW):
-    J, I = np.ogrid[1:N + 1, 1:M + 1]
-    w = np.exp(-((I - M / 2) * (I - M / 2) + (J - N / 2) * (J - N / 2)) / (2. * sigmaW * sigmaW))
-    return w / w.sum()
 
 
 def sigmoidatan(v):
@@ -196,7 +213,7 @@ if __name__ == "__main__":
         'p': 0,
         'q': 0,
         'sigmag': 1,
-        'levels_approx': 50,
+        'levels_approx': 2,
         'lambd': 3
     }
 
