@@ -10,6 +10,7 @@ import torch.nn as nn
 
 from torch.utils.tensorboard import SummaryWriter
 from test import evaluate
+from INRF_IQ.INRF_IQ import INRF_IQ
 
 
 def save_model(model, save_path):
@@ -58,13 +59,18 @@ if __name__ == '__main__':
     model.cuda()  # load model to gpu
 
     ''' define loss '''
-    criterion = nn.L1Loss() #MAE
+    if args.loss == 'MAE':
+        criterion = nn.L1Loss() #MAE
+    if args.loss == 'INRF-IQ':
+        criterion = INRF_IQ()
+    else:
+        criterion = nn.L1Loss()
 
     ''' setup optimizer '''
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     ''' setup tensorboard '''
-    writer = SummaryWriter(os.path.join(args.save_dir, 'train_info'))
+    writer = SummaryWriter(os.path.join(args.save_dir, args.loss))
 
     ''' train model '''
     print('===> start training ...')

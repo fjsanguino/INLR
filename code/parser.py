@@ -24,6 +24,8 @@ def arg_parse():
                         help="train batch size")
     parser.add_argument('--lr', default=0.0001, type=float,
                         help="initial learning rate")
+    parser.add_argument('--loss', default='INRF-IQ', type=str,
+                        help="loss used")
 
     # resume trained model
     parser.add_argument('--resume', type=str, default='',

@@ -5,6 +5,7 @@ from skimage import io, color
 from torch import nn
 import torch
 from torch.nn import functional as F
+import torchvision.transforms as transforms
 
 
 # Obtained from https://stackoverflow.com/questions/17190649/how-to-obtain-a-gaussian-filter-in-python
@@ -64,7 +65,7 @@ def get_gaussian_kernel(size, sigma, norm='gauss'):
     return kernel
 
 
-def INRF_B(u):
+def INRF_B(u, mode):
 
     param = {
         'sigmaMu': 5,
@@ -76,6 +77,13 @@ def INRF_B(u):
         'lambd': 3
     }
 
+    if mode == 'tensor':
+        L = rgb2lab(u) / 100 [:, 0, :, :]
+    if mode == 'array':
+        L = color.rgb2lab(rgb) / 100 [:, :, 0]
+        print(np.allclose(L, np.loadtxt('L.txt', delimiter=','), rtol=1e-04, atol=1e-06))
+        L = torch.from_numpy(L).double().cuda()
+        L = torch.reshape(L, (1, 1, L.size()[0], L.size()[1]))
 
     h = matlab_style_gauss2D_pytorch((2 * param['sigmaMu'], 2 * param['sigmaMu']), param['sigmaMu'])
     #mUL_javi = scipy.ndimage.correlate(L, h_javi, mode='constant', cval=0, origin=-1)
@@ -195,18 +203,77 @@ def conv_reflection(img, kernel):
 def sigmoidatan(v):
     return torch.atan(10 * v)
 
+def rgb2xyz(rgb): # rgb from [0,1]
+    # xyz_from_rgb = np.array([[0.412453, 0.357580, 0.180423],
+        # [0.212671, 0.715160, 0.072169],
+        # [0.019334, 0.119193, 0.950227]])
+
+    mask = (rgb > .04045).type(torch.FloatTensor)
+    if(rgb.is_cuda):
+        mask = mask.cuda()
+
+    rgb = (((rgb+.055)/1.055)**2.4)*mask + rgb/12.92*(1-mask)
+
+    x = .412453*rgb[:,0,:,:]+.357580*rgb[:,1,:,:]+.180423*rgb[:,2,:,:]
+    y = .212671*rgb[:,0,:,:]+.715160*rgb[:,1,:,:]+.072169*rgb[:,2,:,:]
+    z = .019334*rgb[:,0,:,:]+.119193*rgb[:,1,:,:]+.950227*rgb[:,2,:,:]
+    out = torch.cat((x[:,None,:,:],y[:,None,:,:],z[:,None,:,:]),dim=1)
+
+    # if(torch.sum(torch.isnan(out))>0):
+        # print('rgb2xyz')
+        # embed()
+    return out
+
+def xyz2lab(xyz):
+    # 0.95047, 1., 1.08883 # white
+    sc = torch.Tensor((0.95047, 1., 1.08883))[None,:,None,None]
+    if(xyz.is_cuda):
+        sc = sc.cuda()
+
+    xyz_scale = xyz/sc
+
+    mask = (xyz_scale > .008856).type(torch.FloatTensor)
+    if(xyz_scale.is_cuda):
+        mask = mask.cuda()
+
+    xyz_int = xyz_scale**(1/3.)*mask + (7.787*xyz_scale + 16./116.)*(1-mask)
+
+    L = 116.*xyz_int[:,1,:,:]-16.
+    a = 500.*(xyz_int[:,0,:,:]-xyz_int[:,1,:,:])
+    b = 200.*(xyz_int[:,1,:,:]-xyz_int[:,2,:,:])
+    out = torch.cat((L[:,None,:,:],a[:,None,:,:],b[:,None,:,:]),dim=1)
+
+    # if(torch.sum(torch.isnan(out))>0):
+        # print('xyz2lab')
+        # embed()
+
+    return out
+
+def rgb2lab(rgb):
+    return xyz2lab(rgb2xyz(rgb))
 
 if __name__ == "__main__":
     filename = 'Lenna.png'
 
     rgb = io.imread(filename)
+    '''
+    #torch
+    transform = transforms.Compose([
+        transforms.ToTensor(),  # (H,W,C)->(C,H,W), [0,255]->[0, 1.0] RGB->RGB
+    ])
+    rgb_torch = transform(rgb).reshape(1, 3, 512, 512)
+    L = rgb2lab(rgb_torch) / 100 [0,0,:,:]
+    print(np.allclose(L, np.loadtxt('L.txt', delimiter=','), rtol=1e-04, atol=1e-06))
+    L = torch.reshape(L, (1, 1, L.size()[0], L.size()[1]))
+
+    #numpy
     L = color.rgb2lab(rgb) / 100
     L = L[:, :, 0]
     print(np.allclose(L, np.loadtxt('L.txt', delimiter=','), rtol=1e-04, atol=1e-06))
     L = torch.from_numpy(L).double().cuda()
     L = torch.reshape(L, (1, 1, L.size()[0], L.size()[1]))
-
-    INRF_B = INRF_B(L, param)
+    '''
+    INRF_B = INRF_B(rgb, mode='array')
 
 
     exit(0)
