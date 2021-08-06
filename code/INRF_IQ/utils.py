@@ -6,7 +6,7 @@ from torch import nn
 import torch
 from torch.nn import functional as F
 import torchvision.transforms as transforms
-
+from IPython import embed
 
 # Obtained from https://stackoverflow.com/questions/17190649/how-to-obtain-a-gaussian-filter-in-python
 def matlab_style_gauss2D(shape=(3, 3), sigma=0.5):
@@ -78,7 +78,12 @@ def INRF_B(u, mode):
     }
 
     if mode == 'tensor':
-        L = rgb2lab(u) / 100 [:, 0, :, :]
+        if (torch.sum(torch.isnan(u)) > 0):
+            print('INRF_B u')
+            embed()
+        lab = rgb2lab(u) / 100
+        L = lab[:, 0, :, :]
+        L = L.reshape(L.shape[0], 1, L.shape[1], L.shape[2])
     if mode == 'array':
         L = color.rgb2lab(rgb) / 100 [:, :, 0]
         print(np.allclose(L, np.loadtxt('L.txt', delimiter=','), rtol=1e-04, atol=1e-06))
@@ -89,8 +94,7 @@ def INRF_B(u, mode):
     #mUL_javi = scipy.ndimage.correlate(L, h_javi, mode='constant', cval=0, origin=-1)
     #print(np.allclose(mUL_javi, np.loadtxt('mUL.txt', delimiter=','), rtol=1e-04, atol=1e-06)) #tested in matlab with sigmaMU = 5
 
-
-    mUL = conv(u, h)
+    mUL = conv(L, h)
     #print(np.allclose(mUL.reshape(mUL.size()[-2], mUL.size()[-1]).cpu().numpy(), np.loadtxt('mUL.txt', delimiter=','), rtol=1e-04, atol=1e-06))  # tested in matlab with sigmaMU = 5 (tamaño filtro par)
 
     INRF = computeRuInterp_wg_noGPU(L, param['sigmaW'], param['p'], param['q'], param['sigmag'], param['levels_approx'])
@@ -111,7 +115,7 @@ def computeRuInterp_wg_noGPU(u, sigmaW, p, q, sigmag, steps):
         gu = conv_reflection(u, g)
         #print(np.allclose(gu.reshape(gu.size(2),gu.size(3)).cpu().numpy(), np.loadtxt('gu.txt', delimiter=','), rtol=1e-04, atol=1e-06))  # tested in matlab with sigmag = 1, la última columna tiene un error de 0,055
 
-    levels = torch.linspace(torch.min(gu), torch.max(gu), steps, dtype=torch.float64).cuda()
+    levels = torch.linspace(torch.min(gu).item(), torch.max(gu).item(), steps, dtype=torch.float64).cuda()
 
     R_L = createPiecewiseR(gu, levels, p, q, sigmaW)
     R_U = interpolate(gu, R_L, levels)
@@ -212,16 +216,26 @@ def rgb2xyz(rgb): # rgb from [0,1]
     if(rgb.is_cuda):
         mask = mask.cuda()
 
-    rgb = (((rgb+.055)/1.055)**2.4)*mask + rgb/12.92*(1-mask)
+    if(torch.sum(torch.isnan(rgb))>0):
+        print('rgb2xyz start')
+        embed()
+
+    rgb_i = rgb
+    rgb = (strange_pow((rgb+.055)/1.055, 2.4))*mask + rgb/12.92*(1-mask)
+
+    if(torch.sum(torch.isnan(rgb))>0):
+        print('rgb2xyz continue')
+        embed()
 
     x = .412453*rgb[:,0,:,:]+.357580*rgb[:,1,:,:]+.180423*rgb[:,2,:,:]
     y = .212671*rgb[:,0,:,:]+.715160*rgb[:,1,:,:]+.072169*rgb[:,2,:,:]
     z = .019334*rgb[:,0,:,:]+.119193*rgb[:,1,:,:]+.950227*rgb[:,2,:,:]
     out = torch.cat((x[:,None,:,:],y[:,None,:,:],z[:,None,:,:]),dim=1)
 
-    # if(torch.sum(torch.isnan(out))>0):
-        # print('rgb2xyz')
-        # embed()
+    if(torch.sum(torch.isnan(out))>0):
+        print('rgb2xyz')
+        embed()
+
     return out
 
 def xyz2lab(xyz):
@@ -232,25 +246,47 @@ def xyz2lab(xyz):
 
     xyz_scale = xyz/sc
 
+    if(torch.sum(torch.isnan(xyz_scale))>0):
+        print('xyz2lab_xyz_scale')
+        embed()
+
     mask = (xyz_scale > .008856).type(torch.FloatTensor)
     if(xyz_scale.is_cuda):
         mask = mask.cuda()
 
-    xyz_int = xyz_scale**(1/3.)*mask + (7.787*xyz_scale + 16./116.)*(1-mask)
+    if(torch.sum(torch.isnan(mask))>0):
+        print('xyz2lab_mask')
+        embed()
+
+    xyz_int = strange_pow(xyz_scale,1./3)*mask + (7.787*xyz_scale + 16./116.)*(1-mask) #no está en el otro lado
+
+    if(torch.sum(torch.isnan(xyz_int))>0):
+        print('xyz2lab_xyz_int')
+        embed()
 
     L = 116.*xyz_int[:,1,:,:]-16.
     a = 500.*(xyz_int[:,0,:,:]-xyz_int[:,1,:,:])
     b = 200.*(xyz_int[:,1,:,:]-xyz_int[:,2,:,:])
     out = torch.cat((L[:,None,:,:],a[:,None,:,:],b[:,None,:,:]),dim=1)
 
-    # if(torch.sum(torch.isnan(out))>0):
-        # print('xyz2lab')
-        # embed()
+    if(torch.sum(torch.isnan(out))>0):
+        print('xyz2lab_out')
+        embed()
 
     return out
 
+#obtained from https://github.com/richzhang/colorization-pytorch/blob/66a1cb2e5258f7c8f374f582acc8b1ef99c13c27/util/util.py
 def rgb2lab(rgb):
-    return xyz2lab(rgb2xyz(rgb))
+    out = xyz2lab(rgb2xyz(rgb))
+    '''
+    if(torch.sum(torch.isnan(out))>0):
+        print('xyz2lab')
+        embed()
+    '''
+    return out
+
+def strange_pow(tensor, root):
+    return torch.sign(tensor) * torch.abs(tensor).pow(root)
 
 if __name__ == "__main__":
     filename = 'Lenna.png'

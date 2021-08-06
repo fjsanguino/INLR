@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch
 
-from utils import INRF_B
+from INRF_IQ.utils import INRF_B
 
 class INRF_IQ(nn.Module):
 

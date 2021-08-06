@@ -24,7 +24,7 @@ def evaluate(model, data_loader):
 
             for IQA_model in IQA_models_array:
                 IQA_metric_model = IQA_models_class(IQA_model)
-                IQA_metric_model = IQA_metric_model.cuda()
+                IQA_metric_model = IQA_metric_model.double().cuda()
                 if IQA_model == 'MAE':
                     metrics[IQA_model].append(IQA_metric_model(pred, imgs).cpu().numpy().ravel())
                 else:

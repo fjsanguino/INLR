@@ -12,6 +12,7 @@ from torch.utils.tensorboard import SummaryWriter
 from test import evaluate
 from INRF_IQ.INRF_IQ import INRF_IQ
 
+from IPython import embed
 
 def save_model(model, save_path):
     torch.save(model.state_dict(), save_path)
@@ -52,11 +53,11 @@ if __name__ == '__main__':
     val_loader = torch.utils.data.DataLoader(data.DATA(args, mode='test'),
                                                batch_size=args.train_batch,
                                                num_workers=args.workers,
-                                               shuffle=True)
+                                               shuffle=False)
     ''' load model '''
     print('===> prepare model ...')
     model = models_CNN.CompressionNetwork()
-    model.cuda()  # load model to gpu
+    model.double().cuda()  # load model to gpu
 
     ''' define loss '''
     if args.loss == 'MAE':
@@ -89,6 +90,9 @@ if __name__ == '__main__':
 
             ''' forward path '''
             output = model(imgs)
+            if(torch.sum(torch.isnan(output))>0):
+                print('out training')
+                embed()
 
             ''' compute loss, backpropagation, update parameters '''
             loss = criterion(output, imgs)  # compute loss

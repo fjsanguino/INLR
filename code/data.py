@@ -42,14 +42,13 @@ class DATA(Dataset):
             if (self.transform(img).shape[0] != 3):
                 print(file_name, self.transform(img).shape)
             if (self.transform(img).shape[0] == 3):
-                self.tensors.append(self.transform(img))
+                self.tensors.append(self.transform(img).double())
+
+    def __len__(self):
+        return len(self.tensors)
 
 
-def __len__(self):
-    return len(self.tensors)
-
-
-def __getitem__(self, idx):
-    ''' get data '''
-    tensor = self.tensors[idx]
-    return tensor
+    def __getitem__(self, idx):
+        ''' get data '''
+        tensor = self.tensors[idx]
+        return tensor
